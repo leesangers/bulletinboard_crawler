@@ -3,8 +3,9 @@ name: Bulletin Board Monitor
 on:
   schedule:
     # 10:00 AM KST is 01:00 UTC
-    # 03:00 PM KST is 06:00 UTC
-    - cron: '0 1,6 * * *'
+    # 03:23 PM KST is 06:23 UTC
+    - cron: '0 1 * * *'
+    - cron: '23 6 * * *'
   workflow_dispatch: # Enable manual run
 
 jobs:
