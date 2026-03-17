@@ -35,7 +35,7 @@ class KofairCrawler:
                     "title": title,
                     "date": date,
                     "url": self.DETAIL_URL_TEMPLATE.format(post_num),
-                    "is_notice": False # JSON doesn't explicitly mark notice, but fstBrdList does
+                    "source": "KOFAIR"
                 })
             
             # Handle notices if needed from fstBrdList
@@ -43,15 +43,99 @@ class KofairCrawler:
             notice_ids = [str(i.get("num")) for i in fst_list]
             for post in posts:
                 if post["id"] in notice_ids:
-                    post["is_notice"] = True
+                    post["title"] = f"[공지] {post['title']}"
 
             return posts
         except Exception as e:
-            print(f"Error fetching posts: {e}")
+            print(f"Error fetching KOFAIR posts: {e}")
+            return []
+
+class MssCrawler:
+    BASE_URL = "https://www.mss.go.kr"
+    LIST_URL = f"{BASE_URL}/site/smba/ex/bbs/List.do?cbIdx=310"
+    DETAIL_URL_TEMPLATE = f"{BASE_URL}/site/smba/ex/bbs/View.do?cbIdx=310&bcIdx={{}}"
+
+    def __init__(self):
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+
+    def fetch_posts(self):
+        """
+        Fetches the list of posts from the MSS board.
+        Returns a list of dictionaries containing post info.
+        """
+        try:
+            response = requests.get(self.LIST_URL, headers=self.headers, timeout=15)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, "html.parser")
+            # Try finding the table more generically
+            table = soup.select_one("table.board-list")
+            if not table:
+                table = soup.find("table", {"summary": re.compile("공지사항")})
+            
+            if not table:
+                # Fallback to the first table if others fail
+                table = soup.find("table")
+
+            if not table:
+                print("  No table found on MSS page.")
+                return []
+            
+            rows = table.select("tbody tr")
+            posts = []
+            for row in rows:
+                # Find the subject link - could be 'a.pc-detail' or just an anchor in a subject cell
+                subject_link = row.select_one("a.pc-detail") or row.select_one("td.subject a") or row.select_one("a")
+                if not subject_link:
+                    continue
+                
+                title = subject_link.get_text(strip=True)
+                if not title:
+                    continue
+                
+                # Extract bcIdx from onclick: doBbsFView('310', '1066313', ...)
+                onclick_text = subject_link.get("onclick", "") or row.get("onclick", "")
+                match = re.search(r"doBbsFView\(\s*'(\d+)'\s*,\s*'(\d+)'", onclick_text)
+                if not match:
+                    # Try a more relaxed regex
+                    match = re.search(r"doBbsFView\([^,]+,\s*'(\d+)'", onclick_text)
+                
+                if not match:
+                    continue
+                
+                # The second ID is usually the bc_idx
+                bc_idx = match.group(2) if match.lastindex >= 2 else match.group(1)
+                
+                # Date is usually in the 4th column (index 3)
+                tds = row.find_all("td")
+                date = ""
+                if len(tds) > 3:
+                    date = tds[3].get_text(strip=True)
+                
+                posts.append({
+                    "id": bc_idx,
+                    "title": title,
+                    "date": date,
+                    "url": self.DETAIL_URL_TEMPLATE.format(bc_idx),
+                    "source": "MSS"
+                })
+            
+            return posts
+        except Exception as e:
+            print(f"Error fetching MSS posts: {e}")
             return []
 
 if __name__ == "__main__":
-    crawler = KofairCrawler()
-    latest_posts = crawler.fetch_posts()
-    for post in latest_posts[:5]:
-        print(f"[{post['id']}] {post['title']} ({post['date']}) - {post['url']}")
+    print("--- Testing KOFAIR Crawler ---")
+    k_crawler = KofairCrawler()
+    k_posts = k_crawler.fetch_posts()
+    for post in k_posts[:3]:
+        print(f"[{post['source']}] {post['id']}: {post['title']} ({post['date']})")
+
+    print("\n--- Testing MSS Crawler ---")
+    m_crawler = MssCrawler()
+    m_posts = m_crawler.fetch_posts()
+    for post in m_posts[:3]:
+        print(f"[{post['source']}] {post['id']}: {post['title']} ({post['date']})")

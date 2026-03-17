@@ -1,0 +1,45 @@
+name: Bulletin Board Monitor
+
+on:
+  schedule:
+    # 08:00 AM KST is 23:00 UTC of the previous day
+    - cron: '0 23 * * *'
+  workflow_dispatch: # Enable manual run
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # To commit last_ids.json
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Opt into Node.js 24 to avoid deprecation warnings
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Monitor
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+        run: python main.py
+
+      - name: Commit and Push last_ids.json
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add last_ids.json
+          git commit -m "Update last_ids.json [skip ci]" || echo "No changes to commit"
+          git push

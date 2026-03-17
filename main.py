@@ -1,70 +1,87 @@
 import os
 import json
-from crawler import KofairCrawler
+from crawler import KofairCrawler, MssCrawler
 from notifier import EmailNotifier
 
-STATE_FILE = "last_id.txt"
+STATE_FILE = "last_ids.json"
 
-def get_last_id():
-    """Reads the last known post ID from a file."""
+def get_last_ids():
+    """Reads the last known post IDs for all sites from a JSON file."""
     if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, "r") as f:
-            return f.read().strip()
-    return None
+        try:
+            with open(STATE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error reading state file: {e}")
+            return {}
+    
+    # Migration from old text file if exists
+    OLD_STATE_FILE = "last_id.txt"
+    if os.path.exists(OLD_STATE_FILE):
+        with open(OLD_STATE_FILE, "r") as f:
+            old_id = f.read().strip()
+            return {"kofair": old_id}
+            
+    return {}
 
-def save_last_id(last_id):
-    """Saves the latest post ID to a file."""
-    with open(STATE_FILE, "w") as f:
-        f.write(str(last_id))
+def save_last_ids(ids_dict):
+    """Saves the latest post IDs to a JSON file."""
+    with open(STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump(ids_dict, f, indent=4)
 
 def main():
-    print("Starting KOFAIR Bulletin Board Monitor...")
+    print("Starting Bulletin Board Monitor (KOFAIR & MSS)...")
     
-    crawler = KofairCrawler()
+    # Initialize crawlers: (instance, state_key)
+    crawler_configs = [
+        (KofairCrawler(), "kofair"),
+        (MssCrawler(), "mss")
+    ]
     notifier = EmailNotifier()
     
-    # 1. Fetch current posts from website
-    current_posts = crawler.fetch_posts()
-    if not current_posts:
-        print("No posts found or error occurred.")
-        return
+    last_ids = get_last_ids()
+    results = {} # {key: [new_posts]}
 
-    # 2. Identify new posts
-    last_id = get_last_id()
-    new_posts = []
+    for crawler, key in crawler_configs:
+        print(f"Checking {key.upper()}...")
+        current_posts = crawler.fetch_posts()
+        if not current_posts:
+            results[key] = []
+            continue
 
-    if last_id is None:
-        # First run: take the latest 5 posts as 'new' or just set last_id
-        print("First run detected. Setting baseline.")
-        new_posts = current_posts[:5] # Notify top 5 for initial setup
-        if current_posts:
-            save_last_id(current_posts[0]["id"])
-    else:
-        # Find posts with ID > last_id (assuming numeric or chronological order)
-        # However, IDs might not be purely numeric. Since we fetch descending, 
-        # we stop when we hit last_id.
-        for post in current_posts:
-            if post["id"] == last_id:
-                break
-            new_posts.append(post)
+        last_id = last_ids.get(key)
+        new_posts_for_site = []
+
+        if last_id is None:
+            # First run: pick top 3
+            new_posts_for_site = current_posts[:3]
+            last_ids[key] = current_posts[0]["id"]
+        else:
+            for post in current_posts:
+                if post["id"] == last_id:
+                    break
+                new_posts_for_site.append(post)
+            
+            if new_posts_for_site:
+                last_ids[key] = current_posts[0]["id"]
         
-        # Update last_id to the very latest if new posts exist
-        if new_posts:
-            save_last_id(current_posts[0]["id"])
+        results[key] = new_posts_for_site
 
-    # 3. Notify if there are new posts
-    if new_posts:
-        print(f"Found {len(new_posts)} new posts.")
-        # Filter logic (keywords like CP, 하도급 etc. from PRD)
-        keywords = ["CP", "하도급", "교육", "제재", "과징금", "동반성장"]
-        for post in new_posts:
-            if any(kw in post["title"] for kw in keywords):
-                post["title"] = f"★[중점] {post['title']}"
-            print(f"- {post['title']} ({post['url']})")
-        
-        notifier.send_notification(new_posts)
-    else:
-        print("No new posts found.")
+    # 3. Process and Notify (Always)
+    print("Preparing notification...")
+    kofair_new = results.get("kofair", [])
+    mss_new = results.get("mss", [])
+    
+    # Filter logic (stars for keywords)
+    keywords = ["CP", "하도급", "교육", "제재", "과징금", "동반성장", "사업공고", "모집"]
+    for post in kofair_new + mss_new:
+        if any(kw in post["title"] for kw in keywords):
+            post["title"] = f"★[중점] {post['title']}"
+        print(f"- [{post['source']}] {post['title']} ({post['url']})")
+    
+    # Always send daily status
+    notifier.send_notification(kofair_new, mss_new)
+    save_last_ids(last_ids)
 
 if __name__ == "__main__":
     main()
