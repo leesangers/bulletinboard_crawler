@@ -47,6 +47,10 @@ def main():
     for crawler, key in crawler_configs:
         print(f"Checking {key.upper()}...")
         current_posts = crawler.fetch_posts()
+        if current_posts is None:
+            results[key] = None
+            continue
+
         if not current_posts:
             results[key] = []
             continue
@@ -72,18 +76,29 @@ def main():
     # 3. Process and Notify (Always)
     print("Preparing notification...")
     # Consolidate KOFAIR boards for the email section
-    kofair_new = results.get("kofair_notice", []) + results.get("kofair_bid", [])
-    mss_new = results.get("mss", [])
+    kofair_notice_res = results.get("kofair_notice")
+    kofair_bid_res = results.get("kofair_bid")
+    mss_res = results.get("mss")
+
+    kofair_new = []
+    if kofair_notice_res is not None: kofair_new += kofair_notice_res
+    if kofair_bid_res is not None: kofair_new += kofair_bid_res
+    
+    # Check if we should notify about errors
+    kofair_error = (kofair_notice_res is None or kofair_bid_res is None)
+    mss_new = mss_res if mss_res is not None else []
+    mss_error = (mss_res is None)
     
     # Filter logic (stars for keywords)
+    all_new_posts = kofair_new + mss_new
     keywords = ["CP", "하도급", "교육", "제재", "과징금", "동반성장", "사업공고", "모집"]
-    for post in kofair_new + mss_new:
+    for post in all_new_posts:
         if any(kw in post["title"] for kw in keywords):
             post["title"] = f"★[중점] {post['title']}"
         print(f"- [{post['source']}] {post['title']} ({post['url']})")
     
-    # Always send daily status
-    success = notifier.send_notification(kofair_new, mss_new)
+    # Always send daily status (pass error flags)
+    success = notifier.send_notification(kofair_new, mss_new, kofair_error, mss_error)
     
     if not success:
         print("CRITICAL: Notification failed to send.")

@@ -11,7 +11,7 @@ class EmailNotifier:
         self.email_pw = os.getenv("EMAIL_APP_PASSWORD")
         self.recipient_email = os.getenv("RECIPIENT_EMAIL")
 
-    def send_notification(self, kofair_posts, mss_posts):
+    def send_notification(self, kofair_posts, mss_posts, kofair_error=False, mss_error=False):
         """
         Sends an email notification with the list of new posts, split by source.
         Always sends even if no new posts are found.
@@ -37,10 +37,14 @@ class EmailNotifier:
 
             html = "<h2>게시판 신규 등록 게시물 알림</h2>"
             
-            def generate_table_html(title, posts):
+            def generate_table_html(title, posts, is_error=False):
                 section_html = f"<h3>[{title}]</h3>"
+                if is_error:
+                    section_html += "<p style='color: #d93025; font-weight: bold;'>⚠️ 해당 게시판 정보를 가져오는 중 오류가 발생했습니다.</p><br/>"
+                    return section_html
+                
                 if not posts:
-                    section_html += "<p style='color: #d93025; font-weight: bold;'>★ 새 게시글이 없습니다.</p><br/>"
+                    section_html += "<p style='color: #70757a;'>새 게시글이 없습니다.</p><br/>"
                     return section_html
                 
                 section_html += "<table border='1' cellpadding='5' style='border-collapse: collapse; width: 100%;'>"
@@ -53,8 +57,8 @@ class EmailNotifier:
                 return section_html
 
             # KOFAIR first, then MSS
-            html += generate_table_html("KOFAIR - 한국공정거래조정원", kofair_posts)
-            html += generate_table_html("MSS - 중소벤처기업부", mss_posts)
+            html += generate_table_html("KOFAIR - 한국공정거래조정원", kofair_posts, kofair_error)
+            html += generate_table_html("MSS - 중소벤처기업부", mss_posts, mss_error)
             
             html += "<p style='color: grey;'>본 메일은 자동 발송되었습니다.</p>"
 
