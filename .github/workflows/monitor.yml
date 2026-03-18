@@ -2,20 +2,18 @@ name: Bulletin Board Monitor
 
 on:
   schedule:
-    # 09:00 AM KST is 00:00 UTC
-    # 02:30 PM KST is 05:30 UTC
-    - cron: '0 0 * * *'
-    - cron: '30 5 * * *'
-  workflow_dispatch: # Enable manual run
+    - cron: '0 0 * * *'  # 09:00 AM KST
+    - cron: '30 5 * * *' # 02:30 PM KST
+  workflow_dispatch: {}
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # To commit last_ids.json
+      contents: write
 
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Opt into Node.js 24 to avoid deprecation warnings
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout repository
