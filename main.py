@@ -1,10 +1,21 @@
-import os
-import json
-import sys
+from datetime import datetime, timedelta
 from crawler import KofairCrawler, MssCrawler
 from notifier import EmailNotifier
 
+import os
+import json
+import sys
+
 STATE_FILE = "last_ids.json"
+
+def get_target_dates():
+    """Returns a dictionary of target dates for today and yesterday in different formats."""
+    today = datetime.now()
+    yesterday = today - timedelta(days=1)
+    return {
+        "kofair": [today.strftime("%Y-%m-%d"), yesterday.strftime("%Y-%m-%d")],
+        "mss": [today.strftime("%Y.%m.%d"), yesterday.strftime("%Y.%m.%d")]
+    }
 
 def get_last_ids():
     """Reads the last known post IDs for all sites from a JSON file."""
@@ -44,6 +55,8 @@ def main():
     last_ids = get_last_ids()
     results = {} # {key: [new_posts]}
 
+    target_dates = get_target_dates()
+    
     for crawler, key in crawler_configs:
         print(f"Checking {key.upper()}...")
         current_posts = crawler.fetch_posts()
@@ -55,23 +68,20 @@ def main():
             results[key] = []
             continue
 
-        last_id = last_ids.get(key)
-        new_posts_for_site = []
-
-        if last_id is None:
-            # First run: pick top 3
-            new_posts_for_site = current_posts[:3]
-            last_ids[key] = current_posts[0]["id"]
-        else:
-            for post in current_posts:
-                if post["id"] == last_id:
-                    break
-                new_posts_for_site.append(post)
-            
-            if new_posts_for_site:
-                last_ids[key] = current_posts[0]["id"]
+        # Filter by 2-day window
+        date_format_key = "kofair" if "kofair" in key else "mss"
+        allowed_dates = target_dates[date_format_key]
         
-        results[key] = new_posts_for_site
+        filtered_posts = [
+            post for post in current_posts 
+            if post["date"] in allowed_dates
+        ]
+        
+        # Still update last_ids for internal reference (newest post)
+        if current_posts:
+            last_ids[key] = current_posts[0]["id"]
+            
+        results[key] = filtered_posts
 
     # 3. Process and Notify (Always)
     print("Preparing notification...")
