@@ -1,6 +1,8 @@
 name: Bulletin Board Monitor
 
 on:
+  push:
+    branches: [main]
   schedule:
     # 10:00 AM KST is 01:00 UTC
     # 11:54 AM KST is 02:54 UTC
