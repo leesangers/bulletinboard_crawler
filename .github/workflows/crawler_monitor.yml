@@ -2,11 +2,7 @@ name: Bulletin Board Crawler Service
 
 on:
   schedule:
-    - cron: '31 1 * * *' # 10:31 AM KST
-    - cron: '13 6 * * *' # 15:13 PM KST
-  push:
-    branches:
-      - main
+    - cron: '14 1 * * *' # 10:14 AM KST
   workflow_dispatch: {}
 
 jobs:
