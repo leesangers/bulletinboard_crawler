@@ -61,6 +61,7 @@ class MssCrawler:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
             "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer": "https://www.mss.go.kr/site/smba/ex/bbs/List.do?cbIdx=310",
             "Cache-Control": "max-age=0",
             "Connection": "keep-alive"
         }
@@ -129,7 +130,7 @@ class MssCrawler:
             
             return posts
         except Exception as e:
-            print(f"Error fetching MSS posts: {e}")
+            print(f"CRITICAL ERROR fetching MSS posts: {type(e).__name__}: {e}")
             return None
 
 if __name__ == "__main__":
